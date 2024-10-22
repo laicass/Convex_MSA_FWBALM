@@ -1,44 +1,36 @@
-import sys, os, time
+import sys, os, time, subprocess
+import util
 from config import *
 from msa_solver import CVX_ADMM_MSA, smith_waterman
 
-def parse_seqs_file(fname):
-    with open(fname, 'r') as seq_file:
-        allSeqs = []
-        numSeq = 0
-        for tmp_str in seq_file:
-            tmp_str = tmp_str.strip()
-            ht_tmp_seq = ['*'] + list(tmp_str) + ['#']
-            allSeqs.append(ht_tmp_seq)
-            numSeq += 1
-    return allSeqs, numSeq
 
-def get_init_model_length(lenSeqs):
-    return max(lenSeqs)
-
-def sequence_dump(allSeqs):
-    for seq in allSeqs:
-        print(''.join(seq))
-
-def main():
-    args = sys.argv[1:]
-    fname = args[0]
-    allSeqs, numSeq = parse_seqs_file(fname)
+def solve(fname):
+    allSeqs, numSeq = util.parse_seqs_file(fname)
     lenSeqs = [len(seq) for seq in allSeqs]
-    T2 = get_init_model_length (lenSeqs) + LENGTH_OFFSET
-    sequence_dump(allSeqs)
-    start_time = time.time()
+    T2 = util.get_init_model_length (lenSeqs) + LENGTH_OFFSET
+    util.sequence_dump(allSeqs)
     solver = CVX_ADMM_MSA(allSeqs, lenSeqs, T2)
-    end_time = time.time()
 
     print(">>>>>>>>>>>>>>>>>>>>>>>SequenceView<<<<<<<<<<<<<<<<<<<<<<<<")
     recSeq = solver.recSeq
-    #recSeq = "*GCTGTGCATTCGCGGCACAAGAGTCCCGGG#"
     for n,seq in enumerate(allSeqs):
         print("{:<10}".format("Seq "+str(n)+":"), ''.join(seq))
     print("{:<10}".format("SeqRecov:"), ''.join(recSeq))
+
+    if WRITEFILE:
+        fname = os.path.splitext(os.path.basename(fname))[0]
+        f = open(fname+".rec", "w")
+        f.write(''.join(recSeq[1:-1])+'\n')
+        f.close()
     
-    print(">>>>>>>>>>>>>>>>>>>>>>>MatchingView<<<<<<<<<<<<<<<<<<<<<<<<")
+def local_alignment_cpp(fname):
+    fname = os.path.splitext(os.path.basename(fname))[0]
+    args = ["MSA_Convex_Local_Pair.exe", fname+".msa", fname+".rec"]
+    subprocess.call(args)
+    
+
+def local_alignment(allSeqs, numSeq, recSeq):
+    #print(">>>>>>>>>>>>>>>>>>>>>>>MatchingView<<<<<<<<<<<<<<<<<<<<<<<<")
     allModelSeqs, allDataSeqs = [], []
     model_seq = recSeq[1:-1]
     for data_seq in allSeqs:
@@ -48,8 +40,8 @@ def main():
         data_seq = [t.acidB for t in trace]
         allModelSeqs.append(model_seq)
         allDataSeqs.append(data_seq)
-        print(''.join(model_seq))
-        print(''.join(data_seq))
+        #print(''.join(model_seq))
+        #print(''.join(data_seq))
 
     print(">>>>>>>>>>>>>>>>>>>>>ClustalOmegaView<<<<<<<<<<<<<<<<<<<<<<")
     allCOSeqs = [[] for _ in range(numSeq)]
@@ -87,6 +79,17 @@ def main():
     if WRITEFILE:
         f.close()
 
+
+
+
+
+def main():
+    args = sys.argv[1:]
+    fname = args[0]
+    start_time = time.time()
+    solve(fname)
+    local_alignment_cpp(fname)
+    end_time = time.time()
     print("#########################################################")
     print(f"Time Spent: {end_time-start_time} seconds")
 

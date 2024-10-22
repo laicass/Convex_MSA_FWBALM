@@ -1,6 +1,24 @@
 from config import *
 import numpy as np
 
+def parse_seqs_file(fname):
+    with open(fname, 'r') as seq_file:
+        allSeqs = []
+        numSeq = 0
+        for tmp_str in seq_file:
+            tmp_str = tmp_str.strip()
+            ht_tmp_seq = ['*'] + list(tmp_str) + ['#']
+            allSeqs.append(ht_tmp_seq)
+            numSeq += 1
+    return allSeqs, numSeq
+
+def get_init_model_length(lenSeqs):
+    return max(lenSeqs)
+
+def sequence_dump(allSeqs):
+    for seq in allSeqs:
+        print(''.join(seq))
+
 def identity_4D(y):
     I1 = np.eye(y.shape[0])
     I2 = np.eye(y.shape[1])
