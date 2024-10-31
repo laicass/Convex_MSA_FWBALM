@@ -24,7 +24,7 @@ MIN_ADMM_ITER = 10
 MAX_ADMM_ITER = 500
 FW1_GFW_EPS = 1e-6
 FW2_GFW_EPS = 1e-3
-# EPS_ADMM_CoZ = 1e-5
+EPS_ADMM_CoZ = 1e-5
 EPS_Wdiff = 0.001
 
 # Define Scores and Other Constants

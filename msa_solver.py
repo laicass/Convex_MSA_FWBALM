@@ -320,7 +320,7 @@ class CVX_ADMM_MSA:
                     break
             
             # Stopping by diff
-            if abs(self.prev_CoZ - CoZ) < EPS_Wdiff:
+            if abs(self.prev_CoZ - CoZ) < EPS_ADMM_CoZ:
                 print("CoZ Converges. ADMM early stop!")
                 break
             self.prev_CoZ = CoZ
