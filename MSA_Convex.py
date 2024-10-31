@@ -1,5 +1,6 @@
 import sys, os, time, subprocess
 import util
+import numpy as np
 from config import *
 from msa_solver import CVX_ADMM_MSA, smith_waterman
 
@@ -7,7 +8,7 @@ from msa_solver import CVX_ADMM_MSA, smith_waterman
 def solve(fname):
     allSeqs, numSeq = util.parse_seqs_file(fname)
     lenSeqs = [len(seq) for seq in allSeqs]
-    T2 = util.get_init_model_length (lenSeqs) + LENGTH_OFFSET
+    T2 = util.get_init_model_length(lenSeqs) + LENGTH_OFFSET
     util.sequence_dump(allSeqs)
     solver = CVX_ADMM_MSA(allSeqs, lenSeqs, T2)
 
@@ -17,20 +18,24 @@ def solve(fname):
         print("{:<10}".format("Seq "+str(n)+":"), ''.join(seq))
     print("{:<10}".format("SeqRecov:"), ''.join(recSeq))
 
+    log = solver.log
+    log = np.array(log)
     if WRITEFILE:
-        fname = os.path.splitext(os.path.basename(fname))[0]
         f = open(fname+".rec", "w")
         f.write(''.join(recSeq[1:-1])+'\n')
         f.close()
+        np.savetxt(fname+".log", log)
+    
+    return recSeq
     
 def local_alignment_cpp(fname):
-    fname = os.path.splitext(os.path.basename(fname))[0]
-    args = ["MSA_Convex_Local_Pair.exe", fname+".msa", fname+".rec"]
+    args = ["MSA_Convex_Local_Pair.exe", fname, fname+".rec"]
     subprocess.call(args)
     
 
-def local_alignment(allSeqs, numSeq, recSeq):
+def local_alignment(fname, recSeq):
     #print(">>>>>>>>>>>>>>>>>>>>>>>MatchingView<<<<<<<<<<<<<<<<<<<<<<<<")
+    allSeqs, numSeq = util.parse_seqs_file(fname)
     allModelSeqs, allDataSeqs = [], []
     model_seq = recSeq[1:-1]
     for data_seq in allSeqs:
@@ -70,7 +75,6 @@ def local_alignment(allSeqs, numSeq, recSeq):
             break
     
     if WRITEFILE:
-        fname = os.path.splitext(os.path.basename(fname))[0]
         f = open(fname+".co", "w")
     for seq in allCOSeqs:
         print(''.join(seq))
@@ -80,15 +84,13 @@ def local_alignment(allSeqs, numSeq, recSeq):
         f.close()
 
 
-
-
-
 def main():
     args = sys.argv[1:]
     fname = args[0]
     start_time = time.time()
-    solve(fname)
-    local_alignment_cpp(fname)
+    recSeq = solve(fname)
+    #local_alignment_cpp(fname)
+    local_alignment(fname, recSeq)
     end_time = time.time()
     print("#########################################################")
     print(f"Time Spent: {end_time-start_time} seconds")

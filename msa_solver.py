@@ -3,6 +3,7 @@ from config import *
 import copy
 #from dynamic_programming import cube_smith_waterman_GPU
 import util
+import time
 
 def smith_waterman(seqA, seqB):
     plane = [[util.Cell(2) for _ in range(len(seqA)+1)] for _ in range(len(seqB)+1)]
@@ -266,32 +267,34 @@ class CVX_ADMM_MSA:
         self.lenSeqs = lenSeqs
         self.numSeq = len(allSeqs)
         self.T2 = T2
-        
         self.C = self.tensor5D_init(self.T2)
         self.W_1 = self.tensor5D_init(self.T2)
         self.W_2 = self.tensor5D_init(self.T2)
         self.Y = self.tensor5D_init(self.T2)
         self.C = self.set_C(self.C, self.allSeqs)
-        self.inexact_inv = [util.identity_4D(y) for y in self.Y]
-
         self.mu = MU
         self.prev_CoZ = MAX_DOUBLE
         self.recSeq = None
         self.history = {"W_1":[copy.deepcopy(self.W_1),], "W_2":[copy.deepcopy(self.W_2),]}
+        self.log = []
+
         for iter in range(MAX_ADMM_ITER):
             # First subproblem
+            iter_log = []
             for n in range(self.numSeq):
-                self.first_subproblem(self.W_1[n], self.W_2[n], self.Y[n], self.C[n], self.mu, self.allSeqs[n], self.history["W_2"][0][n])
+                fw_iter = self.first_subproblem(self.W_1[n], self.W_2[n], self.Y[n], self.C[n], self.mu, self.allSeqs[n], self.history["W_2"][0][n])
+                iter_log.append(fw_iter)
             self.history["W_1"].append(copy.deepcopy(self.W_1))
             self.history["W_1"] = self.history["W_1"][-2:]
 
             # Second subproblem
-            recSeq = self.second_subproblem(self.W_1, self.W_2, self.Y, self.mu, self.allSeqs, self.lenSeqs)
+            recSeq, fw_iter = self.second_subproblem(self.W_1, self.W_2, self.Y, self.mu, self.allSeqs, self.lenSeqs)
             print(recSeq)
             self.recSeq = recSeq
             self.history["W_2"].append(copy.deepcopy(self.W_2))
             self.history["W_2"] = self.history["W_2"][-2:]
-
+            iter_log.append(fw_iter)
+            
             # Dual update
             for n in range(self.numSeq):
                 #self.Y[n] += self.mu * (self.W_1[n] - self.W_2[n])
@@ -301,6 +304,9 @@ class CVX_ADMM_MSA:
             W1mW2 = max([np.max(np.abs(self.W_1[n]-self.W_2[n])) for n in range(self.numSeq)])
             print("CoZ:", CoZ, "W1mW2:", W1mW2)
             print("ADMM iter =", iter)
+
+            iter_log.append(CoZ)
+            self.log.append(iter_log)
 
             for n in range(self.numSeq):
                 model_seq = recSeq[1:-1]
@@ -370,7 +376,6 @@ class CVX_ADMM_MSA:
             gamma = min(max(gamma, 0.0), gamma_max)
             #print("gamma:", gamma, "gamma max:", gamma_max)
             if gamma <= 1e-10:
-                print(f"Exit first subproblem in {fw_iter} iterations")
                 break
 
             # update W_1
@@ -393,6 +398,8 @@ class CVX_ADMM_MSA:
                     alpha_lookup.pop(V_atom)
                 else:
                     alpha_lookup[V_atom] -= gamma
+        print(f"Exit first subproblem in {fw_iter} iterations")
+        return fw_iter
 
     def second_subproblem(self, W_1, W_2, Y, mu, allSeqs, lenSeqs):
         numSeq = len(allSeqs)
@@ -443,7 +450,6 @@ class CVX_ADMM_MSA:
             #print("gfw_S=", gfw_S, "gfw_W=", gfw_W, "gfw=", gfw)
 
             if fw_iter > 0 and gfw < FW2_GFW_EPS:
-                print("break")
                 break
 
             # Away step
@@ -477,7 +483,6 @@ class CVX_ADMM_MSA:
             gamma = min(max(gamma, 0.0), gamma_max)
             #print("gamma:", gamma, "gamma max:", gamma_max)
             if gamma <= 1e-10:
-                print(f"Exit second subproblem in {fw_iter} iterations")
                 break
             
             # Update W_2
@@ -510,8 +515,9 @@ class CVX_ADMM_MSA:
                 else:
                     alpha_lookup[V_atom] -= gamma
         
+        print(f"Exit second subproblem in {fw_iter} iterations")
         recSeq = [t.acidB for t in trace]
-        return recSeq
+        return recSeq, fw_iter
 
     def primal(self, W_1, W_2):
         return [w1 + w2 for w1, w2 in zip(W_1, W_2)]
